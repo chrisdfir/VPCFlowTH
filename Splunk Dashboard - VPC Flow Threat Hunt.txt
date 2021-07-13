@@ -1,0 +1,302 @@
+<form theme="dark">
+  <label>VPC Flow Threat Hunt</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="field1" searchWhenChanged="true">
+      <label>Time Picker</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Total MB Sent Per Destination Port</title>
+      <chart>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+                | stats sum(bytes) as bytes by dest_port | sort 10 -bytes
+                        | eval "Size (MB)" = round(bytes/1024/1204,2)
+                        | fields - bytes
+                        | rename dest_port as "Destination Port"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">328</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Non-Web Traffic Sources</title>
+      <map>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT dest_port!=80 dest_port!=443
+| where NOT (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip))
+| iplocation src_ip | stats sum(bytes) as bytes by src_ip protocol City Country Region lat lon | geostats sum(bytes) by protocol</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="height">300</option>
+        <option name="mapping.choroplethLayer.colorBins">5</option>
+        <option name="mapping.choroplethLayer.colorMode">auto</option>
+        <option name="mapping.choroplethLayer.maximumColor">0xaf575a</option>
+        <option name="mapping.choroplethLayer.minimumColor">0x62b3b2</option>
+        <option name="mapping.choroplethLayer.neutralPoint">0</option>
+        <option name="mapping.choroplethLayer.shapeOpacity">0.75</option>
+        <option name="mapping.choroplethLayer.showBorder">1</option>
+        <option name="mapping.data.maxClusters">100</option>
+        <option name="mapping.legend.placement">bottomright</option>
+        <option name="mapping.map.center">(0,0)</option>
+        <option name="mapping.map.panning">1</option>
+        <option name="mapping.map.scrollZoom">0</option>
+        <option name="mapping.map.zoom">2</option>
+        <option name="mapping.markerLayer.markerMaxSize">50</option>
+        <option name="mapping.markerLayer.markerMinSize">10</option>
+        <option name="mapping.markerLayer.markerOpacity">0.8</option>
+        <option name="mapping.showTiles">1</option>
+        <option name="mapping.tileLayer.maxZoom">7</option>
+        <option name="mapping.tileLayer.minZoom">0</option>
+        <option name="mapping.tileLayer.tileOpacity">1</option>
+        <option name="mapping.type">marker</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </map>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Suspicious Inbound Infil Detection</title>
+      <table>
+        <title>Point-to-Point Inbound Traffic by Total Bytes</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where NOT (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| stats sum(bytes) as "total_bytes" by src_ip src_port dest_ip protocol 
+| eval "Total Bytes (MB)"=round(total_bytes/1024/1024,2)
+| table src_ip src_port dest_ip protocol "Total Bytes (MB)"  
+| sort -"Total Bytes (MB)"
+| rename src_ip AS "From External IP" src_port AS "Through External Port" dest_ip AS "To Internal IP" protocol AS Protocol</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Suspicious Outbound Exfil Detection</title>
+      <table>
+        <title>Point-to-Point Outbound Traffic by Total Bytes</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where NOT (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| stats sum(bytes) as "total_bytes" by src_ip dest_ip dest_port protocol 
+| eval "Total Bytes (MB)"=round(total_bytes/1024/1024,2)
+| table src_ip dest_ip dest_port protocol "Total Bytes (MB)"  
+| sort -"Total Bytes (MB)"
+| rename src_ip AS "From Internal IP" dest_ip AS "To External IP" dest_port AS "Through External Port" protocol AS Protocol</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Vulnerable Inbound Traffic Detection</title>
+      <input type="multiselect" token="internalport" searchWhenChanged="true">
+        <label>Internal Port Selector</label>
+        <choice value="22">22 (SSH)</choice>
+        <choice value="23">23 (Telnet)</choice>
+        <choice value="25">25 (SMTP)</choice>
+        <choice value="67">67 (DHCP BOOTP)</choice>
+        <choice value="80">80 (HTTP)</choice>
+        <choice value="135">135 (DCOM)</choice>
+        <choice value="137">137 (NetBIOS NS)</choice>
+        <choice value="138">138 (NetBIOS DGM)</choice>
+        <choice value="139">139 (NetBIOS SSN)</choice>
+        <choice value="161">161 (SNMP)</choice>
+        <choice value="443">443 (HTTPS)</choice>
+        <choice value="445">445 (SMB)</choice>
+        <choice value="520">520 (RIP)</choice>
+        <choice value="547">547 (DHCPv6)</choice>
+        <choice value="1080">1080 (SOCKS)</choice>
+        <choice value="1900">1900 (SSDP)</choice>
+        <choice value="3389">3389 (RDP)</choice>
+        <choice value="5900">5900 (VNC)</choice>
+        <choice value="6511">6511 (DCCP)</choice>
+        <valuePrefix>(dest_port=</valuePrefix>
+        <valueSuffix>)</valueSuffix>
+        <delimiter> OR </delimiter>
+        <search>
+          <query/>
+        </search>
+      </input>
+      <table>
+        <title>Inbound Traffic by Port   (Use Internal Port Selector Above)</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where NOT (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| where $internalport$
+| eval "Total Bytes (KB)"=round(bytes/1024,2)
+| table _time src_ip src_port dest_ip dest_port protocol "Total Bytes (KB)" packets
+| rename _time AS Time src_ip AS "External IP" src_port AS "External Port" dest_ip AS "Internal IP" dest_port AS "Internal Port" protocol AS Protocol packets AS Packets
+| convert timeformat="%m/%d/%Y - %I:%M %p" ctime(Time)</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Vulnerable Outbound Traffic Detection</title>
+      <input type="multiselect" token="externalport" searchWhenChanged="true">
+        <label>External Port Selector</label>
+        <choice value="22">22 (SSH)</choice>
+        <choice value="23">23 (Telnet)</choice>
+        <choice value="25">25 (SMTP)</choice>
+        <choice value="67">67 (DHCP BOOTP)</choice>
+        <choice value="80">80 (HTTP)</choice>
+        <choice value="135">135 (DCOM)</choice>
+        <choice value="137">137 (NetBIOS NS)</choice>
+        <choice value="138">138 (NetBIOS DGM)</choice>
+        <choice value="139">139 (NetBIOS SSN)</choice>
+        <choice value="161">161 (SNMP)</choice>
+        <choice value="443">443 (HTTPS)</choice>
+        <choice value="445">445 (SMB)</choice>
+        <choice value="520">520 (RIP)</choice>
+        <choice value="547">547 (DHCPv6)</choice>
+        <choice value="1080">1080 (SOCKS)</choice>
+        <choice value="1900">1900 (SSDP)</choice>
+        <choice value="3389">3389 (RDP)</choice>
+        <choice value="5900">5900 (VNC)</choice>
+        <choice value="6511">6511 (DCCP)</choice>
+        <valuePrefix>(dest_port=</valuePrefix>
+        <valueSuffix>)</valueSuffix>
+        <delimiter> OR </delimiter>
+      </input>
+      <table>
+        <title>Outbound Traffic by Port   (Use External Port Selector Above)</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where NOT (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| where $externalport$
+| eval "Total Bytes (KB)"=round(bytes/1024,2)
+| table _time src_ip src_port dest_ip dest_port protocol "Total Bytes (KB)" packets
+| rename _time AS Time src_ip AS "Internal IP" src_port AS "Internal Port" dest_ip AS "External IP" dest_port AS "External Port" protocol AS Protocol packets AS Packets 
+| convert timeformat="%m/%d/%Y - %I:%M %p" ctime(Time)</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Top 10 Inbound Connections by IP over Port   (Use Internal Port Selector Above)</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where NOT (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| where $internalport$
+| top src_ip
+| rename src_ip AS "External IP"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Top 10 Outbound Connections by IP over Port   (Use External Port Selector Above)</title>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT
+| where (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where NOT (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| where $externalport$
+| top src_ip
+| rename src_ip AS "Internal IP"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Internal Traffic</title>
+      <table>
+        <search>
+          <query>sourcetype="aws:cloudwatchlogs:vpcflow" vpcflow_action=ACCEPT 
+| where (cidrmatch("10.0.0.0/8",src_ip) OR cidrmatch("172.16.0.0/12",src_ip) OR cidrmatch("192.168.0.0/16",src_ip) OR cidrmatch("169.254.0.0/16",src_ip)) 
+| where (cidrmatch("10.0.0.0/8",dest_ip) OR cidrmatch("172.16.0.0/12",dest_ip) OR cidrmatch("192.168.0.0/16",dest_ip) OR cidrmatch("169.254.0.0/16",dest_ip))
+| eval "Total Bytes (KB)"=round(bytes/1024,2)
+| table _time src_ip src_port dest_ip dest_port protocol "Total Bytes (KB)" packets
+| rename _time AS Time src_ip AS "Source IP" src_port AS "Source Port" dest_ip AS "Destination IP" dest_port AS "Destination Port" protocol AS Protocol packets AS Packets
+| convert timeformat="%m/%d/%Y - %I:%M %p" ctime(Time)</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <refresh>5m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</form>
