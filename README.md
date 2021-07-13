@@ -1,6 +1,7 @@
 # VPCFlowTH
-This dashboard breaks up the network traffic data into the following sections for easier analysis.
+This dashboard breaks up the network traffic data into the following sections for easier analysis. 
 
+## Sections of this dashboard include the following: 
 #### Total MB Sent Per Destination Port
 #### Non-Web Traffic Sources (Map)
 #### Suspicious Infil/Exfil Detection
