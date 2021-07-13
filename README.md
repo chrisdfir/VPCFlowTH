@@ -1,4 +1,4 @@
-# VPCFlowTH
+# Threat Hunting with AWS Virtual Private Cloud (VPC) Flow data
 This dashboard breaks up the network traffic data into the following sections for easier analysis. 
 
 ## Sections of this dashboard include the following: 
